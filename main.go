@@ -107,8 +107,8 @@ Commands:
 `, version)
 		case "conn":
 			{
-				if len(args) != 0 && len(args) != 1 && len(args) != 2 {
-					fmt.Println("'conn' expects zero, one, or two arguments")
+				if len(args) != 1 && len(args) != 2 {
+					tprint("'conn' expects one or two arguments")
 					continue
 				}
 
@@ -118,9 +118,7 @@ Commands:
 					conn.Close()
 				}
 
-				if len(args) == 0 {
-					addr = "localhost:44322"
-				} else if len(args) == 1 {
+				if len(args) == 1 {
 					addr = fmt.Sprintf("%s:44322", args[0])
 				} else {
 					addr = fmt.Sprintf("%s:%s", args[0], args[1])
@@ -256,6 +254,21 @@ Commands:
 
 				scn.Scan()
 				tprint(scn.Text())
+			}
+		case "stat":
+			{
+				fmt.Fprintln(conn, "STAT")
+
+				scn := bufio.NewScanner(conn)
+
+				scn.Scan()
+				a := scn.Text()
+				scn.Scan()
+				b := scn.Text()
+				scn.Scan()
+				c := scn.Text()
+
+				tprintf("%s, %s, %s\n", a, b, c)
 			}
 		default:
 			tprintf("Unknown command '%s'\n", cmd)
