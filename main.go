@@ -19,10 +19,14 @@ import (
 var version string
 
 func _main() error {
+	conf, confPath, err := getConfig()
+	if err != nil {
+		return err
+	}
+
 	version = strings.TrimSpace(version)
 
 	fVersion := flag.Bool("v", false, "Show the current GNC version.")
-	fUser := flag.String("u", "", "Sets the username.")
 
 	flag.Parse()
 
@@ -44,8 +48,9 @@ func _main() error {
 	}{os.Stdin, os.Stdout}, "> ")
 
 	var (
-		addr string
-		conn net.Conn
+		addr   string
+		conn   net.Conn
+		buffer strings.Builder
 	)
 
 	defer func() {
@@ -60,6 +65,10 @@ func _main() error {
 
 	tprintf := func(frm string, a ...any) {
 		fmt.Fprintf(tm, frm, a...)
+	}
+
+	if len(conf.Username) == 0 {
+		tprint("Warning: username is empty")
 	}
 
 loop:
@@ -98,38 +107,65 @@ loop:
 Commands:
  exit - exits the client.
  help - shows this message.
+ config - shows the config path and the descriptions of the config options.
  conn [host] [port] - connects to the specified host and port.
- send <msg...> - sends a message.
+ send <msg> - sends a message.
  hist - lists the previously sent messages.
  last <n> - show the specified number of previously sent messages.
  poll <n> - show the amount of messages after the specified index.
  skip <n> - gets the earliest messages after the specified index.
+ add <msg> - appends text to the message buffer.
+ showbuf - shows the contents of the message buffer.
+ sendbuf - sends the message buffer.
 `, version)
+		case "config":
+			tprintf(`Config Path:
+ '%s'
+
+Config Options:
+ Username - The username to use when connected to a Nanochat server.
+ BufferAddSep - The separator to add to the buffer before adding the text from runnning 'add'.
+ ClearBufferOnSend - Should the buffer be cleared when running 'sendbuf'.
+ DefaultHost - The default host to use when 'conn' is run with zero arguments.
+ DefaultPort - The default port to use when 'conn' is run with zero or one arguments
+`, confPath)
 		case "conn":
 			{
-				if len(args) != 1 && len(args) != 2 {
-					tprint("'conn' expects one or two arguments")
+				if len(args) > 2 {
+					tprint("'conn' expects zero, one, or two arguments")
 					continue
 				}
 
-				if conn != nil {
-					tprintf("Disconnecting from '%s'\n", addr)
-					fmt.Fprintln(conn, "QUIT")
-					conn.Close()
+				var host, port string
+
+				switch len(args) {
+				case 0:
+					host, port = conf.DefaultHost, conf.DefaultPort
+				case 1:
+					host, port = args[0], conf.DefaultPort
+				case 2:
+					host, port = args[0], args[1]
 				}
 
-				if len(args) == 1 {
-					addr = fmt.Sprintf("%s:44322", args[0])
+				newAddr := fmt.Sprintf("%s:%s", host, port)
+
+				if newAddr == addr {
+					tprintf("Already connected to '%s'\n", newAddr)
 				} else {
-					addr = fmt.Sprintf("%s:%s", args[0], args[1])
-				}
+					if conn != nil {
+						tprintf("Disconnecting from '%s'\n", addr)
+						fmt.Fprintln(conn, "QUIT")
+						conn.Close()
+					}
 
-				tprintf("Opening a connection to '%s'\n", addr)
+					addr = newAddr
+					tprintf("Opening a connection to '%s'\n", addr)
 
-				conn, err = net.Dial("tcp", addr)
-				if err != nil {
-					tprint(err.Error())
-					conn = nil
+					conn, err = net.Dial("tcp", addr)
+					if err != nil {
+						tprint(err.Error())
+						conn = nil
+					}
 				}
 			}
 		case "send":
@@ -139,8 +175,8 @@ Commands:
 					continue
 				}
 
-				if len(*fUser) > 0 {
-					fmt.Fprintf(conn, "SEND %s: %s\n", *fUser, txt)
+				if len(conf.Username) > 0 {
+					fmt.Fprintf(conn, "SEND %s: %s\n", conf.Username, txt)
 				} else {
 					fmt.Fprintf(conn, "SEND %s\n", txt)
 				}
@@ -220,7 +256,7 @@ Commands:
 					continue
 				}
 
-				fmt.Fprintf(conn, "POLL %d", n)
+				fmt.Fprintf(conn, "POLL %d\n", n)
 
 				scn := bufio.NewScanner(conn)
 				scn.Scan()
@@ -244,7 +280,7 @@ Commands:
 					continue
 				}
 
-				fmt.Fprintf(conn, "SKIP %d", n)
+				fmt.Fprintf(conn, "SKIP %d\n", n)
 
 				scn := bufio.NewScanner(conn)
 
@@ -269,6 +305,39 @@ Commands:
 				c := scn.Text()
 
 				tprintf("%s, %s, %s\n", a, b, c)
+			}
+		case "add":
+			{
+				if buffer.Len() > 0 && len(txt) > 0 {
+					buffer.WriteString(conf.BufferAddSep)
+				}
+
+				buffer.WriteString(txt)
+			}
+		case "showbuf":
+			tprintf("Buffer: `%s`\n", buffer.String())
+		case "sendbuf":
+			{
+				if conn == nil {
+					noConnMsg(tm)
+					continue
+				}
+
+				txt := buffer.String()
+
+				if len(conf.Username) > 0 {
+					fmt.Fprintf(conn, "SEND %s: %s\n", conf.Username, txt)
+				} else {
+					fmt.Fprintf(conn, "SEND %s\n", txt)
+				}
+
+				if conf.ClearBufferOnSend {
+					buffer.Reset()
+				}
+
+				scn := bufio.NewScanner(conn)
+				scn.Scan()
+				tprint(scn.Text())
 			}
 		default:
 			tprintf("Unknown command '%s'\n", cmd)
