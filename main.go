@@ -126,6 +126,7 @@ Commands:
 Config Options:
  Username - The username to use when connected to a Nanochat server.
  BufferAddSep - The separator to add to the buffer before adding the text from runnning 'add'.
+ EntryMsg - The message to send after joined a server; '%name' will get replaced with the value of Username.
  ClearBufferOnSend - Should the buffer be cleared when running 'sendbuf'.
  DefaultHost - The default host to use when 'conn' is run with zero arguments.
  DefaultPort - The default port to use when 'conn' is run with zero or one arguments
@@ -166,6 +167,10 @@ Config Options:
 					if err != nil {
 						tprint(err.Error())
 						conn = nil
+					}
+
+					if len(conf.EntryMsg) > 0 {
+						fmt.Fprintf(conn, "SEND %s\n", strings.ReplaceAll(conf.EntryMsg, "%name", conf.Username))
 					}
 				}
 			}

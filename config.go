@@ -14,6 +14,7 @@ import (
 type Config struct {
 	Username                 string
 	BufferAddSep             string
+	EntryMsg                 string
 	ClearBufferOnSend        bool
 	DefaultHost, DefaultPort string
 }
@@ -54,6 +55,7 @@ func getConfig() (conf Config, confPath string, err error) {
 
 			conf.Username = ""
 			conf.BufferAddSep = " "
+			conf.EntryMsg = ""
 			conf.ClearBufferOnSend = true
 			conf.DefaultHost = "localhost"
 			conf.DefaultPort = "44322"
