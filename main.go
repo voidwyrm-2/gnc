@@ -35,12 +35,12 @@ func _main() error {
 		return nil
 	}
 
-	oldState, err := term.MakeRaw(0)
+	oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
 	if err != nil {
 		return err
 	}
 
-	defer term.Restore(0, oldState)
+	defer term.Restore(int(os.Stdin.Fd()), oldState)
 
 	tm := term.NewTerminal(struct {
 		io.Reader
@@ -115,8 +115,9 @@ Commands:
  poll <n> - show the amount of messages after the specified index.
  skip <n> - gets the earliest messages after the specified index.
  add <msg> - appends text to the message buffer.
- showbuf - shows the contents of the message buffer.
  sendbuf - sends the message buffer.
+ showbuf - shows the contents of the message buffer.
+ clearbuf - clears the buffer contents.
 `, version)
 		case "config":
 			tprintf(`Config Path:
@@ -316,6 +317,8 @@ Config Options:
 			}
 		case "showbuf":
 			tprintf("Buffer: `%s`\n", buffer.String())
+		case "clearbuf":
+			buffer.Reset()
 		case "sendbuf":
 			{
 				if conn == nil {
